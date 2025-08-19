@@ -4,3 +4,4 @@ composer.lock
 .htaccess
 .idea
 auth_codes.txt
+cookies.txt
