@@ -25,6 +25,23 @@ $codesFile = Config::get('auth_codes_file', './auth_codes.txt');
 $message = '';
 $error = '';
 
+// Bootstrap: Create default auth codes if file doesn't exist
+if (!file_exists($codesFile)) {
+    $defaultCodes = "# PHP Proxy Authentication Codes\n";
+    $defaultCodes .= "# Format: code_name:actual_code:created_timestamp\n";
+    $defaultCodes .= "# Lines starting with # are comments and will be ignored\n";
+    $defaultCodes .= "# Default codes - CHANGE THESE IMMEDIATELY FOR SECURITY!\n\n";
+    $defaultCodes .= "admin:DEMO123:" . time() . "\n";
+    $defaultCodes .= "user1:CODE456:" . time() . "\n";
+    $defaultCodes .= "test:TEST789:" . time() . "\n";
+    
+    if (file_put_contents($codesFile, $defaultCodes, LOCK_EX) !== false) {
+        $message = "Auth codes file created with default codes: admin/DEMO123, user1/CODE456, test/TEST789. CHANGE THESE IMMEDIATELY!";
+    } else {
+        $error = "Could not create auth codes file. Please check file permissions for: " . $codesFile;
+    }
+}
+
 // Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['action'])) {
