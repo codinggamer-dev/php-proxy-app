@@ -43,6 +43,90 @@ if (Config::get('session_enable')) {
     session_write_close();
 }
 
+// Handle authentication if enabled
+if (Config::get('auth_enable')) {
+    // Start session for authentication
+    if (session_status() == PHP_SESSION_NONE) {
+        session_start();
+    }
+    
+    // Handle login form submission
+    if (isset($_POST['login_code'])) {
+        require_once('./plugins/AuthPlugin.php');
+        $loginCode = trim($_POST['login_code']);
+        
+        if (AuthPlugin::processLogin($loginCode)) {
+            // Login successful, redirect to homepage
+            header("HTTP/1.1 302 Found");
+            header("Location: index.php");
+            exit;
+        } else {
+            // Login failed
+            $loginError = "Invalid login code. Please try again.";
+        }
+    }
+    
+    // Handle logout request
+    if (isset($_GET['logout'])) {
+        require_once('./plugins/AuthPlugin.php');
+        AuthPlugin::logout();
+        header("HTTP/1.1 302 Found");
+        header("Location: index.php?login=1");
+        exit;
+    }
+    
+    // Handle admin panel request
+    if (isset($_GET['admin']) && isUserAuthenticated()) {
+        require_once('./admin.php');
+        exit;
+    }
+    
+    // Check if showing login page
+    if (isset($_GET['login']) || !isUserAuthenticated()) {
+        echo render_template("./templates/login.php", array(
+            'version' => Proxy::VERSION,
+            'error_msg' => isset($loginError) ? $loginError : null
+        ));
+        exit;
+    }
+    
+    // Close session to avoid blocking
+    session_write_close();
+}
+
+// Helper function to check authentication
+function isUserAuthenticated() {
+    if (!isset($_SESSION['auth_code']) || !isset($_SESSION['auth_time'])) {
+        return false;
+    }
+    
+    // Check session timeout
+    $sessionTimeout = Config::get('auth_session_timeout', 3600);
+    if (time() - $_SESSION['auth_time'] > $sessionTimeout) {
+        return false;
+    }
+    
+    // Verify the code still exists
+    $codesFile = Config::get('auth_codes_file', './auth_codes.txt');
+    $validCodes = array();
+    
+    if (file_exists($codesFile)) {
+        $lines = file($codesFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if (empty($line) || $line[0] == '#') {
+                continue;
+            }
+            $parts = explode(':', $line);
+            if (count($parts) >= 2) {
+                $validCodes[] = $parts[1];
+            }
+        }
+    }
+    
+    return in_array($_SESSION['auth_code'], $validCodes);
+}
+
 // form submit in progress...
 if (isset($_POST['url'])) {
 
@@ -63,6 +147,10 @@ if (isset($_POST['url'])) {
         header("Location: " . Config::get('index_redirect'));
 
     } else {
+        // Start session to check auth status for template
+        if (Config::get('auth_enable') && session_status() == PHP_SESSION_NONE) {
+            session_start();
+        }
         echo render_template("./templates/main.php", array('version' => Proxy::VERSION));
     }
 

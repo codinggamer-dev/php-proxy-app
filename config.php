@@ -4,7 +4,7 @@
 $config = array();
 
 // a unique key that identifies this application - DO NOT LEAVE THIS EMPTY!
-$config['app_key'] = '';
+$config['app_key'] = '27b8a490d04a7f66dec50883aa19fe46';
 
 // a secret key to be used during encryption
 $config['encryption_key'] = '';
@@ -28,11 +28,17 @@ $config['url_mode'] = 2;
 // set it to 'true' when using url_mode=3
 $config['session_enable'] = false;
 
+// Authentication settings
+$config['auth_enable'] = true;
+$config['auth_codes_file'] = './auth_codes.txt';
+$config['auth_session_timeout'] = 3600; // 1 hour in seconds
+
 // By default: PHP will append "X-Powered-By" to your own list of headers
 $config['expose_php'] = true;
 
 // plugins to load - plugins will be loaded in this exact order as in array
 $config['plugins'] = array(
+    'Auth',
     'HeaderRewrite',
     'Stream',
     // ^^ do not disable any of the plugins above
