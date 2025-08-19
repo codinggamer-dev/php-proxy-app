@@ -54,6 +54,17 @@ html body {
 		<h1 style="color:blue;">PHP-Proxy</h1>
 	</div>
 	
+	<?php
+	// Show authentication status if auth is enabled
+	if (function_exists('session_status') && session_status() == PHP_SESSION_ACTIVE && isset($_SESSION['auth_name'])) {
+	?>
+	<div style="background-color:#E8F5E8; padding:8px; margin-bottom:10px; border:1px solid #90EE90; border-radius:5px; text-align:center; font-size:11px;">
+		<strong>✓ Authenticated as:</strong> <?php echo htmlspecialchars($_SESSION['auth_name']); ?> 
+		| <a href="index.php?logout=1" style="color:#333;">Logout</a>
+		| <a href="index.php?admin=1" style="color:#333;">Admin Panel</a>
+	</div>
+	<?php } ?>
+	
 	<?php if(isset($error_msg)){ ?>
 	
 	<div id="error">
