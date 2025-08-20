@@ -14,6 +14,24 @@ function initDatabase($dbPath) {
         $sql = file_get_contents(__DIR__ . '/init_database.sql');
         $pdo->exec($sql);
         
+        // Close the PDO connection to ensure file is fully written
+        $pdo = null;
+        
+        // Set proper permissions for web server access
+        // 664 allows owner and group to read/write, others to read
+        if (file_exists($dbPath)) {
+            if (!chmod($dbPath, 0664)) {
+                echo "Warning: Could not set database file permissions. You may need to manually set permissions on: $dbPath\n";
+            }
+        }
+        
+        // Ensure the directory is writable for SQLite temporary files
+        $dbDir = dirname($dbPath);
+        if (!is_writable($dbDir)) {
+            echo "Warning: Directory $dbDir is not writable. SQLite may not be able to create temporary files.\n";
+            echo "Consider setting directory permissions to 775 or ensuring web server has write access.\n";
+        }
+        
         echo "Database initialized successfully at: $dbPath\n";
         return true;
     } catch (PDOException $e) {

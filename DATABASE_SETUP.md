@@ -8,6 +8,11 @@ This guide helps you migrate from text-based auth codes to SQLite database stora
    ```bash
    php init_db.php
    ```
+   
+   **Note:** The database file will be created with proper permissions (664) to allow web server access. If you encounter "readonly database" errors, ensure:
+   - The database file has 664 permissions (`chmod 664 auth_codes.db`)
+   - The directory containing the database is writable by the web server
+   - The web server user has read/write access to both the file and directory
 
 2. **Create your first admin user:**
    ```bash
@@ -36,6 +41,42 @@ The SQLite database stores auth codes with the following structure:
 ## Migration from Text File
 
 If you have existing codes in `auth_codes.txt`, you can migrate them manually through the admin panel or create a migration script.
+
+## Troubleshooting
+
+### "SQLSTATE[HY000]: General error: 8 attempt to write a readonly database"
+
+This error occurs when the SQLite database file doesn't have proper permissions for the web server. To fix:
+
+1. **Check file permissions:**
+   ```bash
+   ls -la auth_codes.db
+   ```
+   Should show `-rw-rw-r--` (664 permissions)
+
+2. **Fix file permissions if needed:**
+   ```bash
+   chmod 664 auth_codes.db
+   ```
+
+3. **Check directory permissions:**
+   ```bash
+   ls -la .
+   ```
+   The directory should be writable by the web server user
+
+4. **Fix directory permissions if needed:**
+   ```bash
+   chmod 775 .
+   ```
+
+5. **Re-initialize database with proper permissions:**
+   ```bash
+   rm auth_codes.db
+   php init_db.php
+   ```
+
+The AuthCodesDB class now includes auto-initialization and detailed error messages to help diagnose permission issues.
 
 ## Admin Panel Features
 
