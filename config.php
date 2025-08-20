@@ -30,7 +30,8 @@ $config['session_enable'] = false;
 
 // Authentication settings
 $config['auth_enable'] = true;
-$config['auth_codes_file'] = './auth_codes.txt';
+$config['auth_codes_file'] = './auth_codes.txt'; // Legacy - keep for backward compatibility
+$config['auth_codes_db'] = './auth_codes.db'; // New SQLite database
 $config['auth_session_timeout'] = 3600; // 1 hour in seconds
 
 // By default: PHP will append "X-Powered-By" to your own list of headers

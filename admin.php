@@ -1,6 +1,7 @@
 <?php
 
 require("vendor/autoload.php");
+require_once("AuthCodesDB.php");
 
 use Proxy\Config;
 use Proxy\Proxy;
@@ -21,7 +22,21 @@ if (!isset($_SESSION['auth_code'])) {
     exit;
 }
 
-$codesFile = Config::get('auth_codes_file', './auth_codes.txt');
+// Initialize database
+$dbPath = Config::get('auth_codes_db', './auth_codes.db');
+try {
+    $authDB = new AuthCodesDB($dbPath);
+    
+    // Check if current user has admin access
+    if (!$authDB->hasAdminAccess($_SESSION['auth_code'])) {
+        header("HTTP/1.1 403 Forbidden");
+        echo "Access Denied: You don't have admin privileges.";
+        exit;
+    }
+} catch (Exception $e) {
+    die("Database error: " . $e->getMessage());
+}
+
 $message = '';
 $error = '';
 
@@ -33,21 +48,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 if (!empty($_POST['code_name']) && !empty($_POST['code_value'])) {
                     $name = trim($_POST['code_name']);
                     $code = trim($_POST['code_value']);
-                    $timestamp = time();
+                    $adminAccess = isset($_POST['admin_access']) ? 1 : 0;
                     
                     // Validate code doesn't already exist
-                    $existing = getCodesData($codesFile);
-                    $exists = false;
-                    foreach ($existing as $existingCode) {
-                        if ($existingCode['code'] === $code) {
-                            $exists = true;
-                            break;
+                    if (!$authDB->codeExists($code)) {
+                        if ($authDB->addCode($name, $code, $adminAccess)) {
+                            $message = "Code '{$name}' added successfully!";
+                        } else {
+                            $error = "Failed to add code!";
                         }
-                    }
-                    
-                    if (!$exists) {
-                        file_put_contents($codesFile, "\n{$name}:{$code}:{$timestamp}", FILE_APPEND | LOCK_EX);
-                        $message = "Code '{$name}' added successfully!";
                     } else {
                         $error = "Code already exists!";
                     }
@@ -59,23 +68,24 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             case 'delete':
                 if (!empty($_POST['delete_code'])) {
                     $codeToDelete = trim($_POST['delete_code']);
-                    $codes = getCodesData($codesFile);
-                    $newCodes = array();
-                    $deleted = false;
                     
-                    foreach ($codes as $codeData) {
-                        if ($codeData['code'] !== $codeToDelete) {
-                            $newCodes[] = $codeData;
-                        } else {
-                            $deleted = true;
-                        }
-                    }
-                    
-                    if ($deleted) {
-                        writeCodesData($codesFile, $newCodes);
+                    if ($authDB->deleteCode($codeToDelete)) {
                         $message = "Code deleted successfully!";
                     } else {
                         $error = "Code not found!";
+                    }
+                }
+                break;
+                
+            case 'toggle_admin':
+                if (!empty($_POST['toggle_code'])) {
+                    $code = trim($_POST['toggle_code']);
+                    $currentAccess = $authDB->hasAdminAccess($code) ? 0 : 1;
+                    
+                    if ($authDB->updateAdminAccess($code, $currentAccess)) {
+                        $message = "Admin access updated successfully!";
+                    } else {
+                        $error = "Failed to update admin access!";
                     }
                 }
                 break;
@@ -83,41 +93,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 }
 
-function getCodesData($file) {
-    $codes = array();
-    if (file_exists($file)) {
-        $lines = file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-        foreach ($lines as $line) {
-            $line = trim($line);
-            if (empty($line) || $line[0] == '#') {
-                continue;
-            }
-            $parts = explode(':', $line);
-            if (count($parts) >= 2) {
-                $codes[] = array(
-                    'name' => $parts[0],
-                    'code' => $parts[1],
-                    'timestamp' => isset($parts[2]) ? $parts[2] : time()
-                );
-            }
-        }
-    }
-    return $codes;
-}
-
-function writeCodesData($file, $codes) {
-    $content = "# PHP Proxy Authentication Codes\n";
-    $content .= "# Format: code_name:actual_code:created_timestamp\n";
-    $content .= "# Lines starting with # are comments and will be ignored\n\n";
-    
-    foreach ($codes as $codeData) {
-        $content .= "{$codeData['name']}:{$codeData['code']}:{$codeData['timestamp']}\n";
-    }
-    
-    file_put_contents($file, $content, LOCK_EX);
-}
-
-$codes = getCodesData($codesFile);
+$codes = $authDB->getAllCodes();
 
 ?>
 <!DOCTYPE html>
@@ -170,6 +146,12 @@ $codes = getCodesData($codesFile);
                 <label>Code Value:</label>
                 <input type="text" name="code_value" placeholder="e.g., ABC123" required>
             </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" name="admin_access" value="1">
+                    Grant admin panel access
+                </label>
+            </div>
             <button type="submit" class="btn btn-primary">Add Code</button>
         </form>
         
@@ -180,8 +162,9 @@ $codes = getCodesData($codesFile);
                     <tr>
                         <th>Name</th>
                         <th>Code</th>
+                        <th>Admin Access</th>
                         <th>Created</th>
-                        <th>Action</th>
+                        <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -189,8 +172,20 @@ $codes = getCodesData($codesFile);
                         <tr>
                             <td><?php echo htmlspecialchars($codeData['name']); ?></td>
                             <td><code><?php echo htmlspecialchars($codeData['code']); ?></code></td>
+                            <td>
+                                <span style="color: <?php echo $codeData['admin_access'] ? 'green' : 'red'; ?>">
+                                    <?php echo $codeData['admin_access'] ? '✓ Admin' : '✗ User'; ?>
+                                </span>
+                            </td>
                             <td><?php echo date('Y-m-d H:i:s', $codeData['timestamp']); ?></td>
                             <td>
+                                <form method="POST" style="display: inline;">
+                                    <input type="hidden" name="action" value="toggle_admin">
+                                    <input type="hidden" name="toggle_code" value="<?php echo htmlspecialchars($codeData['code']); ?>">
+                                    <button type="submit" class="btn btn-secondary">
+                                        <?php echo $codeData['admin_access'] ? 'Remove Admin' : 'Grant Admin'; ?>
+                                    </button>
+                                </form>
                                 <form method="POST" style="display: inline;">
                                     <input type="hidden" name="action" value="delete">
                                     <input type="hidden" name="delete_code" value="<?php echo htmlspecialchars($codeData['code']); ?>">
@@ -208,7 +203,7 @@ $codes = getCodesData($codesFile);
         <h2>System Information</h2>
         <ul>
             <li><strong>Total Active Codes:</strong> <?php echo count($codes); ?></li>
-            <li><strong>Auth File:</strong> <?php echo htmlspecialchars($codesFile); ?></li>
+            <li><strong>Auth Database:</strong> <?php echo htmlspecialchars($dbPath); ?></li>
             <li><strong>Session Timeout:</strong> <?php echo Config::get('auth_session_timeout', 3600); ?> seconds</li>
             <li><strong>PHP-Proxy Version:</strong> <?php echo Proxy::VERSION; ?></li>
         </ul>

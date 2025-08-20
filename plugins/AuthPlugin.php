@@ -4,6 +4,8 @@ use Proxy\Config;
 use Proxy\Event\ProxyEvent;
 use Proxy\Plugin\AbstractPlugin;
 
+require_once(__DIR__ . '/../AuthCodesDB.php');
+
 class AuthPlugin extends AbstractPlugin
 {
     /**
@@ -59,31 +61,18 @@ class AuthPlugin extends AbstractPlugin
     }
 
     /**
-     * Get list of valid authentication codes from file
+     * Get list of valid authentication codes from database
      */
     private function getValidCodes()
     {
-        $codesFile = Config::get('auth_codes_file', './auth_codes.txt');
-        $codes = array();
-
-        if (file_exists($codesFile)) {
-            $lines = file($codesFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-            foreach ($lines as $line) {
-                $line = trim($line);
-                // Skip comments
-                if (empty($line) || $line[0] == '#') {
-                    continue;
-                }
-                
-                // Parse format: name:code:timestamp
-                $parts = explode(':', $line);
-                if (count($parts) >= 2) {
-                    $codes[] = $parts[1]; // The actual code
-                }
-            }
+        try {
+            $dbPath = Config::get('auth_codes_db', './auth_codes.db');
+            $authDB = new AuthCodesDB($dbPath);
+            return $authDB->getValidCodes();
+        } catch (Exception $e) {
+            // Fallback to empty array if database fails
+            return array();
         }
-
-        return $codes;
     }
 
     /**
@@ -110,11 +99,12 @@ class AuthPlugin extends AbstractPlugin
      */
     public static function processLogin($code)
     {
-        $validCodes = self::getValidCodesStatic();
-        $codesData = self::getCodesData();
-        
-        foreach ($codesData as $codeData) {
-            if ($codeData['code'] === $code) {
+        try {
+            $dbPath = Config::get('auth_codes_db', './auth_codes.db');
+            $authDB = new AuthCodesDB($dbPath);
+            $codeData = $authDB->getCodeData($code);
+            
+            if ($codeData) {
                 // Start session if not started
                 if (session_status() == PHP_SESSION_NONE) {
                     session_start();
@@ -125,6 +115,8 @@ class AuthPlugin extends AbstractPlugin
                 $_SESSION['auth_name'] = $codeData['name'];
                 return true;
             }
+        } catch (Exception $e) {
+            // Database error, deny login
         }
         
         return false;
@@ -135,25 +127,13 @@ class AuthPlugin extends AbstractPlugin
      */
     private static function getValidCodesStatic()
     {
-        $codesFile = Config::get('auth_codes_file', './auth_codes.txt');
-        $codes = array();
-
-        if (file_exists($codesFile)) {
-            $lines = file($codesFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-            foreach ($lines as $line) {
-                $line = trim($line);
-                if (empty($line) || $line[0] == '#') {
-                    continue;
-                }
-                
-                $parts = explode(':', $line);
-                if (count($parts) >= 2) {
-                    $codes[] = $parts[1];
-                }
-            }
+        try {
+            $dbPath = Config::get('auth_codes_db', './auth_codes.db');
+            $authDB = new AuthCodesDB($dbPath);
+            return $authDB->getValidCodes();
+        } catch (Exception $e) {
+            return array();
         }
-
-        return $codes;
     }
 
     /**
@@ -161,29 +141,13 @@ class AuthPlugin extends AbstractPlugin
      */
     private static function getCodesData()
     {
-        $codesFile = Config::get('auth_codes_file', './auth_codes.txt');
-        $codesData = array();
-
-        if (file_exists($codesFile)) {
-            $lines = file($codesFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-            foreach ($lines as $line) {
-                $line = trim($line);
-                if (empty($line) || $line[0] == '#') {
-                    continue;
-                }
-                
-                $parts = explode(':', $line);
-                if (count($parts) >= 2) {
-                    $codesData[] = array(
-                        'name' => $parts[0],
-                        'code' => $parts[1],
-                        'timestamp' => isset($parts[2]) ? $parts[2] : time()
-                    );
-                }
-            }
+        try {
+            $dbPath = Config::get('auth_codes_db', './auth_codes.db');
+            $authDB = new AuthCodesDB($dbPath);
+            return $authDB->getAllCodes();
+        } catch (Exception $e) {
+            return array();
         }
-
-        return $codesData;
     }
 
     /**

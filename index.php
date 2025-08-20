@@ -77,8 +77,22 @@ if (Config::get('auth_enable')) {
     
     // Handle admin panel request
     if (isset($_GET['admin']) && isUserAuthenticated()) {
-        require_once('./admin.php');
-        exit;
+        // Check if user has admin access
+        require_once('./AuthCodesDB.php');
+        try {
+            $dbPath = Config::get('auth_codes_db', './auth_codes.db');
+            $authDB = new AuthCodesDB($dbPath);
+            if ($authDB->hasAdminAccess($_SESSION['auth_code'])) {
+                require_once('./admin.php');
+                exit;
+            } else {
+                echo "Access Denied: You don't have admin privileges.";
+                exit;
+            }
+        } catch (Exception $e) {
+            echo "Access Error: " . $e->getMessage();
+            exit;
+        }
     }
     
     // Check if showing login page
@@ -107,24 +121,33 @@ function isUserAuthenticated() {
     }
     
     // Verify the code still exists
-    $codesFile = Config::get('auth_codes_file', './auth_codes.txt');
-    $validCodes = array();
-    
-    if (file_exists($codesFile)) {
-        $lines = file($codesFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-        foreach ($lines as $line) {
-            $line = trim($line);
-            if (empty($line) || $line[0] == '#') {
-                continue;
-            }
-            $parts = explode(':', $line);
-            if (count($parts) >= 2) {
-                $validCodes[] = $parts[1];
+    try {
+        require_once('./AuthCodesDB.php');
+        $dbPath = Config::get('auth_codes_db', './auth_codes.db');
+        $authDB = new AuthCodesDB($dbPath);
+        $validCodes = $authDB->getValidCodes();
+        return in_array($_SESSION['auth_code'], $validCodes);
+    } catch (Exception $e) {
+        // Fallback to text file check if database fails
+        $codesFile = Config::get('auth_codes_file', './auth_codes.txt');
+        $validCodes = array();
+        
+        if (file_exists($codesFile)) {
+            $lines = file($codesFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+            foreach ($lines as $line) {
+                $line = trim($line);
+                if (empty($line) || $line[0] == '#') {
+                    continue;
+                }
+                $parts = explode(':', $line);
+                if (count($parts) >= 2) {
+                    $validCodes[] = $parts[1];
+                }
             }
         }
+        
+        return in_array($_SESSION['auth_code'], $validCodes);
     }
-    
-    return in_array($_SESSION['auth_code'], $validCodes);
 }
 
 // form submit in progress...
