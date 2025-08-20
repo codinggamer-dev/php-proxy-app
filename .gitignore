@@ -5,3 +5,4 @@ composer.lock
 .idea
 auth_codes.txt
 cookies.txt
+auth_codes.db
