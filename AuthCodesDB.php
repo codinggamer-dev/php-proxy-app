@@ -7,11 +7,50 @@
 class AuthCodesDB {
     private $pdo;
     
+    /**
+     * Initialize database if it doesn't exist with proper permissions
+     */
+    public static function ensureDatabase($dbPath) {
+        if (!file_exists($dbPath)) {
+            require_once(__DIR__ . '/init_db.php');
+            return initDatabase($dbPath);
+        }
+        return true;
+    }
+    
     public function __construct($dbPath) {
         try {
+            // Auto-initialize database if it doesn't exist
+            self::ensureDatabase($dbPath);
+            
+            // Check if database file exists
+            if (!file_exists($dbPath)) {
+                throw new Exception("Database file does not exist: $dbPath. Please run 'php init_db.php' to initialize the database.");
+            }
+            
+            // Check if database file is readable
+            if (!is_readable($dbPath)) {
+                throw new Exception("Database file is not readable: $dbPath. Please check file permissions.");
+            }
+            
+            // Check if database file is writable
+            if (!is_writable($dbPath)) {
+                throw new Exception("Database file is not writable: $dbPath. Please check file permissions (should be 664 or similar).");
+            }
+            
+            // Check if directory is writable (needed for SQLite temporary files)
+            $dbDir = dirname($dbPath);
+            if (!is_writable($dbDir)) {
+                throw new Exception("Database directory is not writable: $dbDir. SQLite needs write access to create temporary files.");
+            }
+            
             $this->pdo = new PDO("sqlite:$dbPath");
             $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         } catch (PDOException $e) {
+            // Check for specific SQLite error 8 (readonly database)
+            if (strpos($e->getMessage(), 'attempt to write a readonly database') !== false) {
+                throw new Exception("Database is read-only. Please check file permissions on: $dbPath (should be 664) and directory permissions on: " . dirname($dbPath) . " (should be 775)");
+            }
             throw new Exception("Database connection failed: " . $e->getMessage());
         }
     }
