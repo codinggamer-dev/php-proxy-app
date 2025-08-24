@@ -31,4 +31,23 @@ file_put_contents($path_config, $config);
 
 echo "New Key: {$key}\r\n";
 
+// Create default auth_codes.txt file if it doesn't exist and auth is enabled
+$configArray = include $path_config;
+if (isset($configArray['auth_enable']) && $configArray['auth_enable'] && !file_exists('./auth_codes.txt')) {
+    $defaultCodes = "# PHP Proxy Authentication Codes\n";
+    $defaultCodes .= "# Format: code_name:actual_code:created_timestamp\n";
+    $defaultCodes .= "# Lines starting with # are comments and will be ignored\n";
+    $defaultCodes .= "# Default codes - CHANGE THESE IMMEDIATELY FOR SECURITY!\n\n";
+    $defaultCodes .= "admin:DEMO123:" . time() . "\n";
+    $defaultCodes .= "user1:CODE456:" . time() . "\n";
+    $defaultCodes .= "test:TEST789:" . time() . "\n";
+    
+    if (file_put_contents('./auth_codes.txt', $defaultCodes, LOCK_EX) !== false) {
+        echo "Default auth codes created: admin/DEMO123, user1/CODE456, test/TEST789\r\n";
+        echo "IMPORTANT: Change these default codes immediately!\r\n";
+    } else {
+        echo "Warning: Could not create auth_codes.txt file. Please check permissions.\r\n";
+    }
+}
+
 ?>
